@@ -1,91 +1,113 @@
 #include <stdlib.h>
 #include <stdio.h>
+#define LIBSSH_STATIC 1
 #include <libssh/libssh.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <string.h>
+#include <errno.h>
 
-void usage (FILE *fp, const char *path)
-{
-
-}
-
-
-static int *VERBOSE;
-static const char *SSH_PASSWORD;
-static FILE *logfile;
-static FILE *surveyfile;
+static int verbose_flag;
 
 int main(int argc, char **argv) 
 {
-    int option_index = 0;
+    ssh_session my_ssh_session;
     int c;
-    static struct option long_options[] = 
+    int rc;
+    char *host;
+    char *password;
+    int port;
+    char *username;
+    char *logfile;
+    /*change to file later*/
+    char *surveyfile;
+    /*change to file later */
+
+    struct option longopts[] = 
     {
-        {"username",    required_argument, NULL, 'U' },
-        {"password",    required_argument, NULL, 'P' },
-        {"port",        required_argument, NULL, 'p' },
-        {"log",         required_argument, NULL, 'L' },
-        {"host",        required_argument, NULL, 'H' },
-        {"survey-file", optional_argument, NULL, 'f' },
-        {"verbose",     no_argument,       &VERBOSE, 'v' },
-        {NULL,          0,                 NULL,   0}
+        { "user",   required_argument,      NULL,   'U'},
+        { "pass",   required_argument,      NULL,   'P'},
+        { "port",   required_argument,      NULL,   'p'},
+        { "logfile",required_argument,      NULL,   'L'},
+        { "survey", required_argument,      NULL,   's'},
+        { "verbose",no_argument,            &verbose_flag,   1},
+        { "host",   required_argument,      NULL,   'H'},
+        {0, 0, 0, 0}
     };
-    ssh_session main_session = ssh_new();
-    if (main_session == NULL)
-        printf('Session could not be opened\n');
-        exit(-1);
-    c = getopt_long(argc, argv, "U:P:p:L:H:f:", long_options, &option_index);
-    while(c != -1)
+    int option_index = 0;
+    while ((c = getopt_long(argc, argv, "U:P:p:L:s:vH:", longopts, NULL)) != -1)
     {
-        switch (c)
+        switch(c)
         {
             case 0:
+            /* If this option set a flag, do nothing else now. */
+                if (longopts[option_index].flag != 0)
+                    break;
+                printf ("option %s", longopts[option_index].name);
+                if (optarg)
+                    printf (" with arg %s", optarg);
+                printf ("\n");
                 break;
             case 'U':
-                ssh_options_set(main_session, SSH_OPTIONS_USER, optarg); /*libssh API used here for setting up user to use */
+                username = optarg;
                 break;
             case 'P':
-                SSH_PASSWORD = malloc(sizeof(optarg) + 1);
-                SSH_PASSWORD = optarg;                                   /* saving password for later after I connect */
+                password = optarg;
                 break;
             case 'p':
-                ssh_options_set(main_session, SSH_OPTIONS_PORT, optarg); /* libssh API used here for setting up port to connect to */
+                port = atoi(optarg);
                 break;
             case 'L':
-                logfile = fopen(optarg, "w"); /* open the logfile specified in getopts */
+                logfile = optarg;
                 break;
-            case 'H':
-                ssh_options_set(main_session, SSH_OPTIONS_HOST, optarg);
-                break;
-            case 'f':
-                surveyfile = fopen(optarg, "r");
+            case 's':
+                surveyfile = optarg;
                 break;
             case 'v':
-                VERBOSE = 1;
+                verbose_flag = 1;
                 break;
-            case ':':
-                printf('Value missing for command.\n');
+            case 'H':
+                host = optarg;
+                break;
+            case '?':
                 break;
             default:
-                printf('Missing options, Please refer to the help menu for guidance.\n');
-                break;
+                abort();
         }
     }
-    if (ssh_options_parse_config(main_session, NULL) < 0) /* if the ssh.conf is not good to go, exit */
+
+    my_ssh_session = ssh_new();
+    if (my_ssh_session == NULL) 
     {
-        printf('SSH config could not be read\n');
-        exit(-1);
-    }
-    if (ssh_connect(main_session) != SSH_OK) /*Actual network connection here, will still have to authenticate. */
-    {
-        printf('Connection was not able to be made\n');
         exit(-1);
     }
 
+    ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, host);
+    ssh_options_set(my_ssh_session, SSH_OPTIONS_PORT, &port);
+    ssh_options_set(my_ssh_session, SSH_OPTIONS_USER, username);
+    rc = ssh_connect(my_ssh_session);
+    if (rc != SSH_OK)
+    {
+        printf("connect failed\n");
+        exit(-1);
+    }
+    else
+    {
+        printf("good connect\n");
+    }
+    
+    rc = ssh_userauth_password(my_ssh_session, NULL, password);
+    if (rc != SSH_OK)
+    {
+        printf("auth failed\n");
+        exit(-1);
+    }
+    else
+    {
+        printf("good auth\n");
+    }
+    
+
+    ssh_disconnect(my_ssh_session);
+    ssh_free(my_ssh_session);
 }
-
-
-
-
-
