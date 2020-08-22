@@ -17,6 +17,7 @@ struct winsize get_size()
     return size;
 }
 
+
 int keyboard_hit()
 {
     struct timeval tv = { 0L, 0L};
@@ -26,36 +27,59 @@ int keyboard_hit()
     return select(1, &fds, NULL, NULL, &tv);
 }
 
+int menu_selection(char **menu_choices)
+{
+    char choice[100];
+    printf("Please select from the following:\n");
+    for (int i = 0; i < sizeof(menu_choices) - 1; i++)
+    {
+        printf("%d. %s\n", i + 1, menu_choices[i]);
+    }
+    int answer;
+    fgets(choice, sizeof(choice), stdin);
+    sscanf(choice, "%d", &answer);
+    if (answer > sizeof(menu_choices) || answer < 0)
+    {
+        printf("You have made an incorrect choice\n");
+        answer = menu_selection(menu_choices);
+    }
+    return answer;
+
+
+
+
+}
+
 int interactive_shell_session(ssh_session main_session, ssh_channel main_channel)
 {
-    int rc;
+    int return_code;
     char error;
     void *err;
     char buffer[256];
     int nbytes, nwritten;
-    rc = ssh_channel_open_session(main_channel);
-    if (rc != SSH_OK)
+    return_code = ssh_channel_open_session(main_channel);
+    if (return_code != SSH_OK)
     {
         ssh_channel_free(main_channel);
         printf("open session no workie");
         exit(-1);
     }
-    rc = ssh_channel_request_pty(main_channel);
-    if (rc != SSH_OK)
+    return_code = ssh_channel_request_pty(main_channel);
+    if (return_code != SSH_OK)
     {
         error = ssh_get_error(err);
         printf("Error: %c", error);
         exit(-1);
     }
     struct winsize size = get_size();
-    rc = ssh_channel_change_pty_size(main_channel, size.ws_col, size.ws_row);
-    if (rc != SSH_OK)
+    return_code = ssh_channel_change_pty_size(main_channel, size.ws_col, size.ws_row);
+    if (return_code != SSH_OK)
     {
         printf("size change no workie");
         exit(-1);
     }
-    rc = ssh_channel_request_shell(main_channel);
-    if (rc != SSH_OK)
+    return_code = ssh_channel_request_shell(main_channel);
+    if (return_code != SSH_OK)
     {
         printf("shell request no workie");
         exit(-1);
@@ -99,14 +123,16 @@ int interactive_shell_session(ssh_session main_session, ssh_channel main_channel
             }
         }
     }
-    return rc;
+    return return_code;
 }
 
 int main(int argc, char **argv) 
 {
     ssh_session main_session;
+    int exit_status;
+    int decision;
     int c;
-    int rc;
+    int return_code;
     char *host;
     char *password;
     int port;
@@ -179,8 +205,8 @@ int main(int argc, char **argv)
     ssh_options_set(main_session, SSH_OPTIONS_HOST, host);
     ssh_options_set(main_session, SSH_OPTIONS_PORT, &port);
     ssh_options_set(main_session, SSH_OPTIONS_USER, username);
-    rc = ssh_connect(main_session);
-    if (rc != SSH_OK)
+    return_code = ssh_connect(main_session);
+    if (return_code != SSH_OK)
     {
         printf("connect failed\n");
         exit(-1);
@@ -190,8 +216,8 @@ int main(int argc, char **argv)
         printf("good connect\n");
     }
     
-    rc = ssh_userauth_password(main_session, NULL, password);
-    if (rc != SSH_OK)
+    return_code = ssh_userauth_password(main_session, NULL, password);
+    if (return_code != SSH_OK)
     {
         printf("auth failed\n");
         exit(-1);
@@ -208,7 +234,21 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    rc = interactive_shell_session(main_session, main_channel);
+    exit_status = 0;
+    while(exit_status != 1)
+    {
+        char *menu_choices[7] = {"Continue", "Interactive Shell", "Forward Tunnel", "Reverse Tunnel", "Download", "Upload", "Start New Survey"};
+        decision = menu_selection(menu_choices);
+        if (decision == 1)
+        {
+            printf("To do.\n");
+        }
+        if (decision == 2)
+        {
+            return_code = interactive_shell_session(main_session, main_channel);
+        }
+        
+    }
 
     ssh_disconnect(main_session);
     ssh_free(main_session);
