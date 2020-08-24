@@ -50,7 +50,7 @@ int menu_selection(char **menu_choices)
 
 }
 
-int interactive_shell_session(ssh_session main_session, ssh_channel main_channel)
+int shell_session(ssh_session main_session, ssh_channel main_channel, FILE *logfile, FILE *surveyfile)
 {
     int return_code;
     char error;
@@ -263,12 +263,12 @@ int main(int argc, char **argv)
             }
             if (surveyfile != NULL)
             {
-                
+                return_code = shell_session(main_session, main_channel)
             }
         }
         if (decision == 2)
         {
-            return_code = interactive_shell_session(main_session, main_channel);
+            return_code = shell_session(main_session, main_channel, logfile, NULL);
         }
         
     }
