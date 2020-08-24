@@ -243,7 +243,28 @@ int main(int argc, char **argv)
         decision = menu_selection(menu_choices);
         if (decision == 1)
         {
-            printf("To do.\n");
+            if (surveyfile == NULL)
+            {
+                printf("Incorrect or no survey file was selected\nWould you like to input one?\n");
+                char *survey_choices[2] = {"Yes", "No"};
+                int survey_decision = menu_selection(survey_choices);
+                if (survey_decision == 1)
+                {
+                    char *new_surveyfile;
+                    char *filebuf[1000];
+                    printf("Please enter the file location of the survey:\n");
+                    fgets(filebuf, sizeof(filebuf), stdin);
+                    sscanf(filebuf, "%s", &new_surveyfile);
+                }
+                if (survey_decision == 2)
+                {
+                    printf("No survey file will be used, returning to the menu.\n");
+                }                
+            }
+            if (surveyfile != NULL)
+            {
+                
+            }
         }
         if (decision == 2)
         {
