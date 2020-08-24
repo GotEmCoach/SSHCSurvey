@@ -137,10 +137,8 @@ int main(int argc, char **argv)
     char *password;
     int port;
     char *username;
-    char *logfile;
-    /*change to file later*/
-    char *surveyfile;
-    /*change to file later */
+    FILE *logfile;
+    FILE *surveyfile;
 
 
     struct option longopts[] = 
@@ -169,24 +167,28 @@ int main(int argc, char **argv)
                 printf ("\n");
                 break;
             case 'U':
+                username = (char*) malloc(sizeof(optarg));
                 username = optarg;
                 break;
             case 'P':
+                password = (char*) malloc(sizeof(optarg));
                 password = optarg;
                 break;
             case 'p':
+                port = (int*) malloc(sizeof(int));
                 port = atoi(optarg);
                 break;
             case 'L':
-                logfile = optarg;
+                logfile = fopen(optarg, "w");
                 break;
             case 's':
-                surveyfile = optarg;
+                surveyfile = fopen(optarg, "r");
                 break;
             case 'v':
                 verbose_flag = 1;
                 break;
             case 'H':
+                host = (char*) malloc(sizeof(optarg));
                 host = optarg;
                 break;
             case '?':
