@@ -263,14 +263,33 @@ int main(int argc, char **argv)
             }
             if (surveyfile != NULL)
             {
-                return_code = shell_session(main_session, main_channel)
+                return_code = shell_session(main_session, main_channel, logfile, surveyfile);
             }
         }
         if (decision == 2)
         {
             return_code = shell_session(main_session, main_channel, logfile, NULL);
         }
-        
+        if (decision == 3)
+        {
+            printf("To Do\n");
+        }
+        if (decision == 4)
+        {
+            printf("To Do\n");
+        }
+        if (decision == 5)
+        {
+            printf("To Do\n");
+        }
+        if (decision == 6)
+        {
+            printf("To Do\n");
+        }
+        if (decision == 7)
+        {
+            printf("To Do\n")
+        }        
     }
 
     ssh_disconnect(main_session);
