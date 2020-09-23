@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #define LIBSSH_STATIC 1
@@ -7,6 +8,8 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <signal.h>
+
 
 static int verbose_flag;
 
@@ -27,27 +30,79 @@ int keyboard_hit()
     return select(1, &fds, NULL, NULL, &tv);
 }
 
-int menu_selection(char **menu_choices)
+int menu_selection(char **menu_options, int size)
 {
-    char choice[100];
-    printf("Please select from the following:\n");
-    for (int i = 0; i < sizeof(menu_choices) - 1; i++)
-    {
-        printf("%d. %s\n", i + 1, menu_choices[i]);
-    }
     int answer;
-    fgets(choice, sizeof(choice), stdin);
-    sscanf(choice, "%d", &answer);
-    if (answer > sizeof(menu_choices) || answer < 0)
+    while(1)
     {
-        printf("You have made an incorrect choice\n");
-        answer = menu_selection(menu_choices);
+        char choice[100];
+        printf("Please select from the following:\n");
+        for (int i = 0; i < size; i++)
+        {
+            printf("%d. %s\n", i + 1, menu_options[i]);
+        }
+        fgets(choice, sizeof(choice), stdin);
+        sscanf(choice, "%d", &answer);
+        if (answer > size || answer < 0)
+        {
+            printf("You have made an incorrect choice\n");
+            answer = menu_selection(menu_options, size);
+        }
+        else
+        {
+            break;
+        }
     }
     return answer;
+}
 
+int countfilelines(FILE *file)
+{
+    int count = 0;
+    char c;
+    if (file == NULL)
+    {
+        printf("File could not be opened\n");
+        return NULL;
+    }
+    for (c = getc(file); c != EOF; c = getc(file))
+    {
+        if (c == '\n')
+        {
+            count++;
+        }
+    }
+    return count;
+}
 
+char* survey_parser(FILE *surveyfile)
+{
+    int linecount = countfilelines(surveyfile);
+    char* lines[linecount];
+    char *line = NULL;
+    size_t len;
+    ssize_t read;
 
+    for (int i = 0; i < linecount; i++)
+    {
+        while ((read = getline(&line, &len, surveyfile) != -1))
+        {
+            lines[i] = line;
+        }
+        line = NULL; 
+    }
+    free(line);
+    return lines;
+}
 
+void signal_handler(int signo, ssh_channel main_channel, char buffer)
+{
+    int nbytes, nwritten;
+    if (signo == SIGINT)
+    {
+        nwritten = ssh_channel_write(main_channel, buffer, nbytes);
+        if (nbytes != nwritten) return SSH_ERROR;
+    }
 }
 
 int shell_session(ssh_session main_session, ssh_channel main_channel, FILE *logfile, FILE *surveyfile)
@@ -55,7 +110,7 @@ int shell_session(ssh_session main_session, ssh_channel main_channel, FILE *logf
     int return_code;
     char error;
     void *err;
-    char buffer[256];
+    char buffer[20000];
     int nbytes, nwritten;
     return_code = ssh_channel_open_session(main_channel);
     if (return_code != SSH_OK)
@@ -102,26 +157,31 @@ int shell_session(ssh_session main_session, ssh_channel main_channel, FILE *logf
 
         ssh_select(in_channels, out_channels, max_file_descriptor, &file_descriptors, &timeout);
 
-        if (out_channels[0] != NULL)
+        if (surveyfile == NULL)
         {
-            nbytes = ssh_channel_read(main_channel, buffer, sizeof(buffer), 0);
-            if (nbytes < 0) return SSH_ERROR;
-            if (nbytes > 0)
+            if (out_channels[0] != NULL)
             {
-                nwritten = write(1, buffer, nbytes);
-                if (nwritten != nbytes) return SSH_ERROR;
+                nbytes = ssh_channel_read(main_channel, buffer, sizeof(buffer), 0);
+                if (nbytes < 0) return SSH_ERROR;
+                if (nbytes > 0)
+                {
+                    nwritten = write(1, buffer, nbytes);
+                    if (nwritten != nbytes) return SSH_ERROR;
+                }
+            }
+            if (FD_ISSET(0, &file_descriptors))
+            {
+
+                nbytes = read(0, buffer, sizeof(buffer));
+                if (nbytes < 0) return SSH_ERROR;
+                if (nbytes > 0)
+                {
+                    nwritten = ssh_channel_write(main_channel, buffer, nbytes);
+                    if (nbytes != nwritten) return SSH_ERROR;
+                }
             }
         }
-        if (FD_ISSET(0, &file_descriptors))
-        {
-            nbytes = read(0, buffer, sizeof(buffer));
-            if (nbytes < 0) return SSH_ERROR;
-            if (nbytes > 0)
-            {
-                nwritten = ssh_channel_write(main_channel, buffer, nbytes);
-                if (nbytes != nwritten) return SSH_ERROR;
-            }
-        }
+
     }
     return return_code;
 }
@@ -240,25 +300,27 @@ int main(int argc, char **argv)
     while(exit_status != 1)
     {
         char *menu_choices[7] = {"Continue", "Interactive Shell", "Forward Tunnel", "Reverse Tunnel", "Download", "Upload", "Start New Survey"};
-        decision = menu_selection(menu_choices);
+        decision = menu_selection(menu_choices, 7);
         if (decision == 1)
         {
-            if (surveyfile == NULL)
+            while (surveyfile == NULL)
             {
                 printf("Incorrect or no survey file was selected\nWould you like to input one?\n");
                 char *survey_choices[2] = {"Yes", "No"};
-                int survey_decision = menu_selection(survey_choices);
+                int survey_decision = menu_selection(survey_choices, 2);
                 if (survey_decision == 1)
                 {
-                    char *new_surveyfile;
-                    char *filebuf[1000];
+                    char new_surveyfile;
+                    char filebuf[1000];
                     printf("Please enter the file location of the survey:\n");
                     fgets(filebuf, sizeof(filebuf), stdin);
-                    sscanf(filebuf, "%s", &new_surveyfile);
+                    sscanf(filebuf, "%c", &new_surveyfile);
+                    surveyfile = fopen(new_surveyfile, 'r');
                 }
                 if (survey_decision == 2)
                 {
                     printf("No survey file will be used, returning to the menu.\n");
+                    break;
                 }                
             }
             if (surveyfile != NULL)
@@ -288,7 +350,7 @@ int main(int argc, char **argv)
         }
         if (decision == 7)
         {
-            printf("To Do\n")
+            printf("To Do\n");
         }        
     }
 
